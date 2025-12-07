@@ -1,0 +1,4 @@
+xWR6843
+3D People Tracking
+/home/afaq/Downloads/Papers/arqaious-multi-py/cfg/AOP_6m_default.cfg
+False
