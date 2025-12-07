@@ -1,0 +1,5 @@
+venv/
+venv_pyside/
+Industrial_Visualizer/venv_pyside/
+*.pyc
+__pycache__/
