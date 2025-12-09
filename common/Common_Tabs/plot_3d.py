@@ -14,6 +14,27 @@ COLOR_MODE_TRACK = 'Associated Track'
 
 class Plot3D():
     def __init__(self, demo=None):
+        
+        self.sensorPositions = {
+            0: {
+                'x': 0, 'y': 0, 'z': 0, 
+                'az': 0, 'elev': 0,
+                'wall': 'CENTER',
+                'wallOffsetX': 0.0
+            },
+            1: {
+                'x': 0, 'y': 0, 'z': 0, 
+                'az': 0, 'elev': 0,
+                'wall': 'CENTER',
+                'wallOffsetX': 0.0
+            },
+            2: {
+                'x': 0, 'y': 0, 'z': 0, 
+                'az': 0, 'elev': 0,
+                'wall': 'CENTER',
+                'wallOffsetX': 0.0
+            }
+        }
         # Create plot
         self.plot_3d = gl.GLViewWidget()
         # Sets background to a pastel grey
@@ -270,58 +291,124 @@ class Plot3D():
 
     def parseSensorPosition(self, args, is_x843, radar_index=0):
         """
-        Parse sensor position for multiple radars
+        Parse sensor position on boundary box walls
         
-        Args:
-            args: Configuration arguments from cfg file
-            is_x843: Boolean indicating if device is x843 family
-            radar_index: Which radar (0=primary, 1=second, 2=third)
+        Format: sensorPosition<N> <wall> <offsetX> <height> <azTilt> <elevTilt>
+        OR (backward compatible):
+        Format: sensorPosition<N> <height> <azTilt> <elevTilt>
         """
-        print(f"[Multi-Radar] Parsing sensor position for radar {radar_index}")
+        pos = self.sensorPositions[radar_index]
         
-        # Parse position based on device type
-        if is_x843:
-            # x843 format: sensorPosition <height> <azimuthTilt> <elevationTilt>
-            self.sensorPositions[radar_index]['x'] = 0
-            self.sensorPositions[radar_index]['y'] = 0
-            self.sensorPositions[radar_index]['z'] = float(args[1])
-            self.sensorPositions[radar_index]['az'] = float(args[2])
-            self.sensorPositions[radar_index]['elev'] = float(args[3])
-        else:
-            # x432/x844 format: sensorPosition <x> <y> <z> <azimuthTilt> <elevationTilt>
-            self.sensorPositions[radar_index]['x'] = float(args[1])
-            self.sensorPositions[radar_index]['y'] = float(args[2])
-            self.sensorPositions[radar_index]['z'] = float(args[3])
-            self.sensorPositions[radar_index]['az'] = float(args[4])
-            self.sensorPositions[radar_index]['elev'] = float(args[5])
-        
-        # Update primary radar variables for backward compatibility
-        if radar_index == 0:
-            self.xOffset = self.sensorPositions[0]['x']
-            self.yOffset = self.sensorPositions[0]['y']
-            self.sensorHeight = self.sensorPositions[0]['z']
-            self.az_tilt = self.sensorPositions[0]['az']
-            self.elev_tilt = self.sensorPositions[0]['elev']
+        # Check if new format (wall-based)
+        if len(args) > 1 and args[1].upper() in ['FRONT', 'BACK', 'LEFT', 'RIGHT', 'CENTER']:
+            # NEW FORMAT: Wall-based positioning
+            wall = args[1].upper()
+            offsetX = float(args[2]) if len(args) > 2 else 0.0
+            height = float(args[3]) if len(args) > 3 else 2.0
+            azTilt = float(args[4]) if len(args) > 4 else 0.0
+            elevTilt = float(args[5]) if len(args) > 5 else 15.0
             
-            # Update primary EVM box
+            pos['wall'] = wall
+            pos['wallOffsetX'] = offsetX
+            pos['z'] = height
+            pos['az'] = azTilt
+            pos['elev'] = elevTilt
+            
+            # Calculate actual XY position based on wall
+            self.positionRadarOnWall(radar_index)
+            
+        else:
+            # OLD FORMAT: Direct position (backward compatible)
+            if is_x843:
+                pos['z'] = float(args[1])
+                pos['az'] = float(args[2]) if len(args) > 2 else 0
+                pos['elev'] = float(args[3]) if len(args) > 3 else 0
+                pos['x'] = 0
+                pos['y'] = 0
+                pos['wall'] = 'CENTER'
+            else:
+                pos['x'] = float(args[1])
+                pos['y'] = float(args[2])
+                pos['z'] = float(args[3])
+                pos['az'] = float(args[4]) if len(args) > 4 else 0
+                pos['elev'] = float(args[5]) if len(args) > 5 else 0
+                pos['wall'] = 'CENTER'
+        
+        # Update visualization
+        self.updateRadarMarker(radar_index)
+        
+        # Update primary radar (backward compatibility)
+        if radar_index == 0:
+            self.xOffset = pos['x']
+            self.yOffset = pos['y']
+            self.sensorHeight = pos['z']
+            self.az_tilt = pos['az']
+            self.elev_tilt = pos['elev']
+            
             self.evmBox.resetTransform()
             if self.demo == "LPD":
                 self.elev_tilt = -1 * self.elev_tilt
                 self.az_tilt = -1 * self.az_tilt
             self.evmBox.rotate(-1 * self.elev_tilt, 1, 0, 0)
             self.evmBox.rotate(-1 * self.az_tilt, 0, 0, 1)
-            self.evmBox.translate(0, 0, self.sensorHeight)
+            self.evmBox.translate(pos['x'], pos['y'], pos['z'])
         
-        # Create or update radar marker
-        self.updateRadarMarker(radar_index)
-        
-        print(f"[Multi-Radar] Radar {radar_index} position: "
-              f"X={self.sensorPositions[radar_index]['x']:.2f}m, "
-              f"Y={self.sensorPositions[radar_index]['y']:.2f}m, "
-              f"Z={self.sensorPositions[radar_index]['z']:.2f}m, "
-              f"Az={self.sensorPositions[radar_index]['az']:.1f}°, "
-              f"Elev={self.sensorPositions[radar_index]['elev']:.1f}°")
+        print(f"[Wall Mount] Radar {radar_index}: {pos['wall']} wall at "
+            f"({pos['x']:.2f}, {pos['y']:.2f}, {pos['z']:.2f})")
 
+    def positionRadarOnWall(self, radar_index):
+        """
+        Calculate XY position based on which boundary box wall radar is mounted on
+        """
+        pos = self.sensorPositions[radar_index]
+        wall = pos['wall']
+        offsetX = pos.get('wallOffsetX', 0.0)
+        
+        # Get boundary box dimensions
+        if len(self.boundaryBoxViz) > 0:
+            bbox = self.boundaryBoxViz[0]
+            minX = bbox['minX']
+            maxX = bbox['maxX']
+            minY = bbox['minY']
+            maxY = bbox['maxY']
+        else:
+            # Default if no boundary box
+            minX, maxX = -2.0, 2.0
+            minY, maxY = 0.0, 4.0
+        
+        centerX = (minX + maxX) / 2.0
+        centerY = (minY + maxY) / 2.0
+        
+        # Position radar on the specified wall
+        if wall == 'FRONT':
+            # Front wall: Y = minY, X varies
+            pos['x'] = centerX + offsetX
+            pos['y'] = minY
+            
+        elif wall == 'BACK':
+            # Back wall: Y = maxY, X varies
+            pos['x'] = centerX + offsetX
+            pos['y'] = maxY
+            
+        elif wall == 'LEFT':
+            # Left wall: X = minX, Y varies
+            pos['x'] = minX
+            pos['y'] = centerY + offsetX  # offsetX becomes offsetY for left/right walls
+            
+        elif wall == 'RIGHT':
+            # Right wall: X = maxX, Y varies
+            pos['x'] = maxX
+            pos['y'] = centerY + offsetX
+            
+        elif wall == 'CENTER':
+            # Center: X,Y at center
+            pos['x'] = centerX + offsetX
+            pos['y'] = centerY
+        
+        print(f"[Wall Mount] Radar {radar_index} on {wall} wall: "
+            f"offset={offsetX:.2f}m → position=({pos['x']:.2f}, {pos['y']:.2f})")
+        
+        
     def updateRadarMarker(self, radar_index):
         """
         Create or update the visual marker (dot) for a radar sensor
