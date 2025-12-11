@@ -25,7 +25,6 @@ class FallDetectionSliderClass(QtWidgets.QSlider):
         return QtWidgets.QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), p - sliderMin,
                                                sliderMax - sliderMin, opt.upsideDown)
 
-# Class meant to store the fall detection results of all the tracks
 class FallDetection:
 
     # Initialize the class with the default parameters (tested empirically)
@@ -33,9 +32,13 @@ class FallDetection:
         self.fallingThresholdProportion = fallingThresholdProportion
         self.secondsInFallBuffer = secondsInFallBuffer
         self.heightHistoryLen = int(round(self.secondsInFallBuffer * frameTime))
-        self.heightBuffer = [deque([-5] *  self.heightHistoryLen, maxlen =  self.heightHistoryLen) for i in range(maxNumTracks)]
+        
+        # Changed from list to dictionary to handle arbitrary track IDs
+        self.heightBuffer = {}
         self.tracksIDsInPreviousFrame = []
-        self.fallBufferDisplay = [0 for i in range(maxNumTracks)] # Fall results that will be displayed to screen
+        
+        # Changed from list to dictionary to handle arbitrary track IDs
+        self.fallBufferDisplay = {}
         self.numFramesToDisplayFall = 100 # How many frames do you want to display a fall on the screen for
 
     # Sensitivity as given by the FallDetectionSliderClass instance
@@ -43,10 +46,14 @@ class FallDetection:
         self.fallingThresholdProportion = fallingThresholdProportion
 
     # Update the fall detection results for every track in the frame
+    # Update the fall detection results for every track in the frame
     def step(self, heights, tracks):
         # Decrement results for fall detection display
-        for idx, result in enumerate(self.fallBufferDisplay):
-            self.fallBufferDisplay[idx] = max(self.fallBufferDisplay[idx] - 1, 0)
+        for tid in list(self.fallBufferDisplay.keys()):
+            self.fallBufferDisplay[tid] = max(self.fallBufferDisplay[tid] - 1, 0)
+            # Clean up entries that have expired
+            if self.fallBufferDisplay[tid] == 0:
+                del self.fallBufferDisplay[tid]
 
         trackIDsInCurrFrame = []
         # Populate heights for current tracks
@@ -56,6 +63,15 @@ class FallDetection:
                 # Found correct track
                 if (int(track[0]) == int(height[0])):
                     tid = int(height[0])
+                    
+                    # Initialize buffer for new track IDs
+                    if tid not in self.heightBuffer:
+                        self.heightBuffer[tid] = deque([-5] * self.heightHistoryLen, maxlen=self.heightHistoryLen)
+                    
+                    # Initialize fall display for new track IDs
+                    if tid not in self.fallBufferDisplay:
+                        self.fallBufferDisplay[tid] = 0
+                    
                     self.heightBuffer[tid].appendleft(height[1])
                     trackIDsInCurrFrame.append(tid)
                     
@@ -66,13 +82,16 @@ class FallDetection:
 
         # Reset the buffer for tracks that were detected in the previous frame but not the current frame
         tracksToReset = set(self.tracksIDsInPreviousFrame) - set(trackIDsInCurrFrame) 
-        for track in tracksToReset:
-            for frame in range(self.heightHistoryLen):
-                self.heightBuffer[track].appendleft(-5) # Fill the buffer with -5's to remove any history for the track
+        for tid in tracksToReset:
+            # Reset the height buffer
+            if tid in self.heightBuffer:
+                for frame in range(self.heightHistoryLen):
+                    self.heightBuffer[tid].appendleft(-5) # Fill the buffer with -5's to remove any history for the track
+        
         self.tracksIDsInPreviousFrame = copy.deepcopy(trackIDsInCurrFrame)
         
         return self.fallBufferDisplay
-        
+             
 
 # TODO This stuff was never used in original implementation?
 #     def resetFallText(self):
