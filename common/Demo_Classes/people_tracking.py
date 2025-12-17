@@ -46,7 +46,7 @@ class PeopleTracking(Plot3D, Plot1D):
         self.colorGradient = pg.GradientWidget(orientation='right')
         self.colorGradient.restoreState({'ticks': [ (1, (255, 0, 0, 255)), (0, (131, 238, 255, 255))], 'mode': 'hsv'})
         self.colorGradient.setVisible(False)
-        self.maxTracks = int(5) # default to 5 tracks
+        self.maxTracks = int(500) # default to 5 tracks
         self.trackColorMap = get_trackColors(self.maxTracks)
 
     def setupGUI(self, gridLayout, demoTabs, device):
@@ -252,7 +252,7 @@ class PeopleTracking(Plot3D, Plot1D):
         return self.fallDetectionOptionsBox
 
     def parseTrackingCfg(self, args):
-        self.maxTracks = int(args[4])
+        self.maxTracks = 600
         self.updateNumTracksBuffer() # Update the max number of tracks based off the config file
         self.trackColorMap = get_trackColors(self.maxTracks)
         for m in range(self.maxTracks):
