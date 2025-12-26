@@ -184,7 +184,7 @@ class PeopleTracking(Plot3D, Plot1D):
         self.frameNumDisplay = QLabel('Frame: 0')
         self.plotTimeDisplay = QLabel('Plot Time: 0 ms')
         self.numPointsDisplay = QLabel('Points: 0')
-        self.numTargetsDisplay = QLabel('Targets: 0')
+        self.numTargetsDisplay = QLabel('Occupency: 0')
         self.avgPower = QLabel('Average Power: 0 mw')
         self.statsLayout = QVBoxLayout()
         self.statsLayout.addWidget(self.frameNumDisplay)
